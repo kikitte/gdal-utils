@@ -1,7 +1,7 @@
 Read the smallest valid extent of a raster, so it ignores the blank rows/cols.
 
 1. mian.cpp - use Float64 as gdal data type, so it is suitable for most raster but with more memory  consumption.
-2. main_byte.cpp - use Float64 as gdal data type.
+2. main_byte.cpp - use byte as gdal data type.
 
 ### Usage
 

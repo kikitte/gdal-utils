@@ -4,9 +4,8 @@ Print the smallest valid extent of a raster(ignores the blank rows/cols).
 
 ```bash
 cd crop-to-valid-extent
-mkdir build
-cmake -S . -B build
-cd build && make
+cmake -D CMAKE_BUILD_TYPE=Release -S . -B build
+cmake --build ./build
 # The executable file is crop-to-valid-extent
 ```
 

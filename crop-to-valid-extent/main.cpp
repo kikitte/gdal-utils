@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <memory>
 #include <gdal_priv.h>
 #include "deps/CLI11.hpp"
 #include "ValidRegion.h"
@@ -8,7 +9,7 @@
 
 Region GetBandValidRegion(GDALRasterBand *);
 template<typename T>
-Region GetTypedBandValidRegion(GDALRasterBand *, T *);
+Region GetTypedBandValidRegion(GDALRasterBand *);
 
 int main(int argc, char **argv) {
   CLI::App app
@@ -65,44 +66,30 @@ int main(int argc, char **argv) {
 Region GetBandValidRegion(GDALRasterBand *band) {
   GDALDataType data_type = band->GetRasterDataType();
   switch (data_type) {
-    case GDT_Byte:return GetTypedBandValidRegion<char>(band, nullptr);
-    case GDT_Int16:return GetTypedBandValidRegion<int16_t>(band, nullptr);
-    case GDT_UInt16:return GetTypedBandValidRegion<uint16_t>(band, nullptr);
-    case GDT_Int32:return GetTypedBandValidRegion<int32_t>(band, nullptr);
-    case GDT_UInt32:return GetTypedBandValidRegion<uint32_t>(band, nullptr);
-    case GDT_Float32:return GetTypedBandValidRegion<float_t>(band, nullptr);
-    case GDT_Float64:return GetTypedBandValidRegion<double_t>(band, nullptr);
+    case GDT_Byte:return GetTypedBandValidRegion<char>(band);
+    case GDT_Int16:return GetTypedBandValidRegion<int16_t>(band);
+    case GDT_UInt16:return GetTypedBandValidRegion<uint16_t>(band);
+    case GDT_Int32:return GetTypedBandValidRegion<int32_t>(band);
+    case GDT_UInt32:return GetTypedBandValidRegion<uint32_t>(band);
+    case GDT_Float32:return GetTypedBandValidRegion<float_t>(band);
+    case GDT_Float64:return GetTypedBandValidRegion<double_t>(band);
     default: return {-1, -1, -1, -1};
   }
 };
 
 template<typename T>
-Region GetTypedBandValidRegion(GDALRasterBand *band, T *unused) {
-  int block_x_size, block_y_size;
-  band->GetBlockSize(&block_x_size, &block_y_size);
-  if (block_x_size != band->GetXSize()) {
-    std::cerr << "This file does not support scanline retrieving." << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  int band_x_szie = band->GetXSize(), band_y_size = band->GetYSize();
-  int x_blocks = (band_x_szie + block_x_size - 1) / block_x_size;
-  int y_blocks = (band_y_size + block_y_size - 1) / block_y_size;
-  T *block_data = new T[block_x_size * block_y_size];
-
+Region GetTypedBandValidRegion(GDALRasterBand *band) {
+  int cols = band->GetXSize(), rows = band->GetYSize();
+  std::unique_ptr<T[]> line_data{new T[cols]};
   ValidRegion<T> region(static_cast<T>(band->GetNoDataValue()));
 
-  for (int y_blk = 0; y_blk < y_blocks; ++y_blk) {
-    for (int x_blk = 0; x_blk < x_blocks; ++x_blk) {
-      int x_valid, y_valid;
-      auto err = band->ReadBlock(x_blk, y_blk, block_data);
-      band->GetActualBlockSize(x_blk, y_blk, &x_valid, &y_valid);
-      for (int y = 0; y < y_valid; ++y) {
-        region.UpdateFromLine(block_data + y * band_x_szie, band_x_szie);
-      }
+  for (int row = 0; row != rows; ++row) {
+    auto err = band->RasterIO(GF_Read, 0, row, cols, 1, line_data.get(), cols, 1, band->GetRasterDataType(), 0, 0);
+    if (err != CE_None) {
+      throw std::runtime_error("Raster IO Error!");
     }
+    region.UpdateFromLine(line_data.get(), cols);
   }
-
-  delete[] block_data;
 
   return region;
 }
